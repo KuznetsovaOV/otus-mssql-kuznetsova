@@ -1,0 +1,152 @@
+/*
+1. Посчитать среднюю цену товара, общую сумму продажи по месяцам.
+Вывести:
+* Год продажи (например, 2015)
+* Месяц продажи (например, 4)
+* Средняя цена за месяц по всем товарам
+* Общая сумма продаж за месяц
+
+Продажи смотреть в таблице Sales.Invoices и связанных таблицах.
+*/
+
+SELECT 
+  year(t.[InvoiceDate]) as 'Год продажи'
+, month(t.[InvoiceDate]) as 'Месяц продажи'
+, avg(t1.[UnitPrice]) as 'Средняя цена за месяц по всем товарам'
+, sum(t1.[Quantity]*t1.[UnitPrice]) as 'Общая сумма продаж за месяц'
+  
+FROM [WideWorldImporters].[Sales].[Invoices] t
+left join [WideWorldImporters].[Sales].[InvoiceLines] t1 on t.InvoiceID = t1.InvoiceID
+where 
+year(t.[InvoiceDate]) = 2015 
+and month(t.[InvoiceDate]) = 4
+
+group by
+  year(t.[InvoiceDate]) 
+, month(t.[InvoiceDate])
+
+/*
+2. Отобразить все месяцы, где общая сумма продаж превысила 4 600 000
+
+Вывести:
+* Год продажи (например, 2015)
+* Месяц продажи (например, 4)
+* Общая сумма продаж
+
+Продажи смотреть в таблице Sales.Invoices и связанных таблицах.
+*/
+SELECT 
+  year(t.[InvoiceDate]) as 'Год продажи'
+, month(t.[InvoiceDate]) as 'Месяц продажи'
+, sum(t1.[Quantity]*t1.[UnitPrice]) as 'Общая сумма продаж за месяц'
+  
+FROM [WideWorldImporters].[Sales].[Invoices] t
+left join [WideWorldImporters].[Sales].[InvoiceLines] t1 on t.InvoiceID = t1.InvoiceID
+--where 
+--year(t.[InvoiceDate]) = 2015 
+--and month(t.[InvoiceDate]) = 4
+
+group by
+  year(t.[InvoiceDate]) 
+, month(t.[InvoiceDate])
+
+having
+sum(t1.[Quantity]*t1.[UnitPrice]) > 4600000
+
+/*
+3. Вывести сумму продаж, дату первой продажи
+и количество проданного по месяцам, по товарам,
+продажи которых менее 50 ед в месяц.
+Группировка должна быть по году,  месяцу, товару.
+
+Вывести:
+* Год продажи
+* Месяц продажи
+* Наименование товара
+* Сумма продаж
+* Дата первой продажи
+* Количество проданного
+
+Продажи смотреть в таблице Sales.Invoices и связанных таблицах.
+*/
+SELECT 
+  year(t.[InvoiceDate]) as 'Год продажи'
+, month(t.[InvoiceDate]) as 'Месяц продажи'
+, t2.StockItemName as 'Наименование товара'
+, sum(t1.[Quantity]*t1.[UnitPrice]) as 'Сумма продаж'
+, min(t.[InvoiceDate]) as 'Дата первой продажи'
+, sum(t1.[Quantity]) as 'Количество проданного'
+
+  
+FROM [WideWorldImporters].[Sales].[Invoices] t
+left join [WideWorldImporters].[Sales].[InvoiceLines] t1 on t.InvoiceID = t1.InvoiceID
+left join [WideWorldImporters].[Warehouse].[StockItems] t2 on t1.StockItemID = t2.StockItemID
+
+group by
+  year(t.[InvoiceDate]) 
+, month(t.[InvoiceDate])
+, t2.StockItemName
+
+having 
+sum(t1.[Quantity]) < 50
+
+-- ---------------------------------------------------------------------------
+-- Опционально
+-- ---------------------------------------------------------------------------
+/*
+Написать запросы 2-3 так, чтобы если в каком-то месяце не было продаж,
+то этот месяц также отображался бы в результатах, но там были нули.
+*/
+--Создание календаря
+DECLARE @Year INT = 2013
+DECLARE @YearCnt INT = 4 
+DECLARE @StartDate DATE = DATEFROMPARTS(@Year, 01,'01')
+DECLARE @EndDate DATE = DATEADD(DAY, -1, DATEADD(YEAR, @YearCnt, 
+@StartDate))
+
+;WITH Cal(n) AS
+(
+SELECT 0 UNION ALL SELECT n + 1 FROM Cal
+WHERE n < DATEDIFF(DAY, @StartDate, @EndDate)
+),
+FnlDt(d) AS
+(
+SELECT DATEADD(DAY, n, @StartDate) FROM Cal
+),
+FinalCte AS
+(
+SELECT
+[Date] = CONVERT(DATE,d),
+[Day] = DATEPART(DAY, d),
+[Month] = DATENAME(MONTH, d),
+[Year] = DATEPART(YEAR, d),
+[DayName] = DATENAME(WEEKDAY, d)
+
+FROM FnlDt
+)
+SELECT * 
+into #Calendar
+FROM finalCte
+ORDER BY [Date]
+OPTION (MAXRECURSION 0)
+
+/*Запрос 2*/
+
+select 
+  year(cal.Date) as 'Год продажи'
+, month(cal.Date) as 'Месяц продажи'
+, isnull(sum(t1.[Quantity]*t1.[UnitPrice]),0) as 'Общая сумма продаж за месяц'
+from #Calendar cal
+left join [WideWorldImporters].[Sales].[Invoices] t on cal.Date = t.[InvoiceDate]
+left join [WideWorldImporters].[Sales].[InvoiceLines] t1 on t.InvoiceID = t1.InvoiceID
+
+group by
+  year(cal.Date) 
+, month(cal.Date)
+
+having sum(t1.[Quantity]) is null
+or (year(cal.Date) = 2015  and month(cal.Date) = 4 and sum(t1.[Quantity]*t1.[UnitPrice]) > 4600000)
+
+order by 
+  year(cal.Date) 
+, month(cal.Date)
