@@ -1,0 +1,174 @@
+-- ---------------------------------------------------------------------------
+-- Задание - написать выборки для получения указанных ниже данных.
+-- Для всех заданий, где возможно, сделайте два варианта запросов:
+--  1) через вложенный запрос
+--  2) через WITH (для производных таблиц)
+-- ---------------------------------------------------------------------------
+
+
+/*
+1. Выберите сотрудников (Application.People), которые являются продажниками (IsSalesPerson), 
+и не сделали ни одной продажи 04 июля 2015 года. 
+Вывести ИД сотрудника и его полное имя. 
+Продажи смотреть в таблице Sales.Invoices.
+*/
+
+SELECT t.[PersonID]
+      ,t.[FullName]
+
+  FROM [WideWorldImporters].[Application].[People] t
+
+  where t.[IsSalesperson] = 1 --Продажники
+
+  and t.[PersonID] not in
+  
+ (SELECT distinct [SalespersonPersonID]
+FROM [WideWorldImporters].[Sales].[Invoices]
+where [InvoiceDate] = '2015-07-04')
+
+
+;with cte as (
+SELECT t.[PersonID]
+      ,t.[FullName]
+FROM [WideWorldImporters].[Application].[People] t
+where t.[IsSalesperson] = 1 --Продажники
+)
+
+select t.*
+from cte t 
+left join [WideWorldImporters].[Sales].[Invoices] t1 on t.PersonID = t1.SalespersonPersonID and t1.[InvoiceDate] = '2015-07-04'
+where t1.SalespersonPersonID is null
+
+
+/*
+2. Выберите товары с минимальной ценой (подзапросом). Сделайте два варианта подзапроса. 
+Вывести: ИД товара, наименование товара, цена.
+*/
+SELECT 
+  StockItemID
+, StockItemName
+, UnitPrice 
+FROM Warehouse.StockItems
+WHERE UnitPrice <= ALL /*любой*/(SELECT UnitPrice FROM Warehouse.StockItems)
+
+SELECT 
+   StockItemID
+ , StockItemName
+ , UnitPrice 
+FROM Warehouse.StockItems
+WHERE UnitPrice = (SELECT min(UnitPrice) FROM Warehouse.StockItems)
+
+;with cte as (
+SELECT 
+min(UnitPrice) as UnitPrice
+FROM Warehouse.StockItems
+)
+SELECT 
+   t.StockItemID
+ , t.StockItemName
+ , t.UnitPrice 
+
+FROM Warehouse.StockItems t
+left join cte t1 on t.UnitPrice  = t1.UnitPrice
+where t1.UnitPrice is not null
+
+
+/*
+3. Выберите информацию по клиентам, которые перевели компании пять максимальных платежей 
+из Sales.CustomerTransactions. 
+Представьте несколько способов (в том числе с CTE). 
+*/
+SELECT *
+  FROM [WideWorldImporters].[Sales].[Customers] 
+where [CustomerID] in 
+
+(SELECT top 5 
+ [CustomerID]
+FROM [WideWorldImporters].[Sales].[CustomerTransactions]
+order by [TransactionAmount] desc)
+
+
+;with cte as (
+SELECT  top 5 
+ [CustomerID]
+FROM [WideWorldImporters].[Sales].[CustomerTransactions]
+order by [TransactionAmount] desc
+)
+
+SELECT distinct t.[CustomerID]
+      ,t.[CustomerName]
+      ,t.[BillToCustomerID]
+      ,t.[CustomerCategoryID]
+      ,t.[BuyingGroupID]
+      ,t.[PrimaryContactPersonID]
+      ,t.[AlternateContactPersonID]
+      ,t.[DeliveryMethodID]
+      ,t.[DeliveryCityID]
+      ,t.[PostalCityID]
+      ,t.[CreditLimit]
+      ,t.[AccountOpenedDate]
+      ,t.[StandardDiscountPercentage]
+      ,t.[IsStatementSent]
+      ,t.[IsOnCreditHold]
+      ,t.[PaymentDays]
+      ,t.[PhoneNumber]
+      ,t.[FaxNumber]
+      ,t.[DeliveryRun]
+      ,t.[RunPosition]
+      ,t.[WebsiteURL]
+      ,t.[DeliveryAddressLine1]
+      ,t.[DeliveryAddressLine2]
+      ,t.[DeliveryPostalCode]
+      ,t.[PostalAddressLine1]
+      ,t.[PostalAddressLine2]
+      ,t.[PostalPostalCode]
+      ,t.[LastEditedBy]
+      ,t.[ValidFrom]
+      ,t.[ValidTo]
+  FROM [WideWorldImporters].[Sales].[Customers] t
+left join cte t1 on t.CustomerID = t1.CustomerID 
+where t1.CustomerID is not null
+
+/*
+4. Выберите города (ид и название), в которые были доставлены товары, 
+входящие в тройку самых дорогих товаров, а также имя сотрудника, 
+который осуществлял упаковку заказов (PackedByPersonID).
+*/
+SELECT distinct 
+  c.DeliveryCityID
+, c1.CityName
+, p.FullName СотрудникУпаковщик
+
+  FROM [WideWorldImporters].[Sales].[Orders] t  --заказы
+  left join [WideWorldImporters].[Sales].[OrderLines] t1 on t.OrderID = t1.OrderID --тч заказы
+  left join [WideWorldImporters].[Application].[People] p on t.[PickedByPersonID] = p.PersonID  --сотр
+  left join [WideWorldImporters].[Sales].[Customers] c on t.[CustomerID] = c.CustomerID --покупатели
+  left join [WideWorldImporters].[Application].[Cities] c1 on c.DeliveryCityID = c1.CityID 
+
+  where t1.[StockItemID] in 
+  (SELECT top 3 WITH TIES
+t.[StockItemID]
+FROM [WideWorldImporters].[Warehouse].[StockItems] t --товары
+order by t.[UnitPrice] desc)
+
+;with cte as (
+SELECT top 3 WITH TIES
+t.[StockItemID]
+FROM [WideWorldImporters].[Warehouse].[StockItems] t --товары
+order by t.[UnitPrice] desc
+)
+
+SELECT distinct 
+  c.DeliveryCityID
+, c1.CityName
+, p.FullName СотрудникУпаковщик
+
+  FROM [WideWorldImporters].[Sales].[Orders] t  --заказы
+  left join [WideWorldImporters].[Sales].[OrderLines] t1 on t.OrderID = t1.OrderID --тч заказы
+  left join [WideWorldImporters].[Application].[People] p on t.[PickedByPersonID] = p.PersonID  --сотр
+  left join [WideWorldImporters].[Sales].[Customers] c on t.[CustomerID] = c.CustomerID --покупатели
+  left join [WideWorldImporters].[Application].[Cities] c1 on c.DeliveryCityID = c1.CityID 
+  left join cte cte on t1.StockItemID = cte.StockItemID
+
+  where cte.StockItemID is not null
+
