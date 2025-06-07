@@ -1,32 +1,32 @@
-/*
+
 1. Требуется написать запрос, который в результате своего выполнения 
 формирует сводку по количеству покупок в разрезе клиентов и месяцев.
 В строках должны быть месяцы (дата начала месяца), в столбцах - клиенты.
 
 Клиентов взять с ID 2-6, это все подразделение Tailspin Toys.
 Имя клиента нужно поменять так чтобы осталось только уточнение.
-Например, исходное значение "Tailspin Toys (Gasport, NY)" - вы выводите только "Gasport, NY".
+Например, исходное значение Tailspin Toys (Gasport, NY) - вы выводите только Gasport, NY.
 Дата должна иметь формат dd.mm.yyyy, например, 25.12.2019.
 
-Пример, как должны выглядеть результаты:
+Пример, как должны выглядеть результаты
 -------------+--------------------+--------------------+-------------+--------------+------------
-InvoiceMonth | Peeples Valley, AZ | Medicine Lodge, KS | Gasport, NY | Sylvanite, MT | Jessie, ND
+InvoiceMonth  Peeples Valley, AZ  Medicine Lodge, KS  Gasport, NY  Sylvanite, MT  Jessie, ND
 -------------+--------------------+--------------------+-------------+--------------+------------
-01.01.2013   |      3             |        1           |      4      |      2        |     2
-01.02.2013   |      7             |        3           |      4      |      2        |     1
+01.01.2013         3                     1                 4            2             2
+01.02.2013         7                     3                 4            2             1
 -------------+--------------------+--------------------+-------------+--------------+------------
-*/
 
 
-select *
+
+select 
 from
 (
 SELECT 
   replace(replace(t2.CustomerName, 'Tailspin Toys (',''),')','') as Клиент
 , FORMAT(DATEADD(DAY, 1, EOMONTH(DATEADD(MONTH, -1, t.[OrderDate]))), 'd', 'de-de')  as Период
-, sum(t1.Quantity) as Количество
+, count(t.OrderID) as Количество  
 FROM [WideWorldImporters].[Sales].[Orders] t
-left join [WideWorldImporters].[Sales].[OrderLines] t1 on t.OrderID = t1.OrderID
+--left join [WideWorldImporters].[Sales].[OrderLines] t1 on t.OrderID = t1.OrderID
 left join [WideWorldImporters].[Sales].[Customers] t2 on t.CustomerID = t2.CustomerID
 where t.[CustomerID] between 2 and 6
 group by      
@@ -40,20 +40,20 @@ sum(Количество) for Клиент in ([Gasport, NY], [Jessie, ND], [Med
 order by 
 convert(date,Период)
 
-/*
-2. Для всех клиентов с именем, в котором есть "Tailspin Toys"
+
+2. Для всех клиентов с именем, в котором есть Tailspin Toys
 вывести все адреса, которые есть в таблице, в одной колонке.
 
-Пример результата:
+Пример результата
 ----------------------------+--------------------
-CustomerName                | AddressLine
+CustomerName                 AddressLine
 ----------------------------+--------------------
-Tailspin Toys (Head Office) | Shop 38
-Tailspin Toys (Head Office) | 1877 Mittal Road
-Tailspin Toys (Head Office) | PO Box 8975
-Tailspin Toys (Head Office) | Ribeiroville
+Tailspin Toys (Head Office)  Shop 38
+Tailspin Toys (Head Office)  1877 Mittal Road
+Tailspin Toys (Head Office)  PO Box 8975
+Tailspin Toys (Head Office)  Ribeiroville
 ----------------------------+--------------------
-*/
+
 
 select 
  [CustomerName]
@@ -67,27 +67,28 @@ SELECT
 , [PostalAddressLine1]
 , [PostalAddressLine2]
 FROM [WideWorldImporters].[Sales].[Customers]
+where [CustomerName] like '%Tailspin Toys%'
 ) t
 unpivot
 (
 AddressLine for Customer in ([DeliveryAddressLine1],[DeliveryAddressLine2],[PostalAddressLine1],[PostalAddressLine2])
 ) unpvt
 
-/*
+
 3. В таблице стран (Application.Countries) есть поля с цифровым кодом страны и с буквенным.
 Сделайте выборку ИД страны, названия и ее кода так, 
 чтобы в поле с кодом был либо цифровой либо буквенный код.
 
-Пример результата:
+Пример результата
 --------------------------------
-CountryId | CountryName | Code
+CountryId  CountryName  Code
 ----------+-------------+-------
-1         | Afghanistan | AFG
-1         | Afghanistan | 4
-3         | Albania     | ALB
-3         | Albania     | 8
+1          Afghanistan  AFG
+1          Afghanistan  4
+3          Albania      ALB
+3          Albania      8
 ----------+-------------+-------
-*/
+
 
 select 
   [CountryID]
@@ -107,10 +108,10 @@ unpivot
 Code for Country in ([IsoAlpha3Code], [IsoNumericCode])
 ) unpvt
 
-/*
+
 4. Выберите по каждому клиенту два самых дорогих товара, которые он покупал.
 В результатах должно быть ид клиета, его название, ид товара, цена, дата покупки.
-*/
+
 SELECT 
   c.CustomerID
 , C.CustomerName
