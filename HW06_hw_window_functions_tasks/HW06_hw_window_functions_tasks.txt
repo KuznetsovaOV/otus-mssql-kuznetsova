@@ -1,0 +1,207 @@
+/*
+1. Сделать расчет суммы продаж нарастающим итогом по месяцам с 2015 года 
+(в рамках одного месяца он будет одинаковый, нарастать будет в течение времени выборки).
+Выведите: id продажи, название клиента, дату продажи, сумму продажи, сумму нарастающим итогом
+
+Пример:
+-------------+----------------------------
+Дата продажи | Нарастающий итог по месяцу
+-------------+----------------------------
+ 2015-01-29   | 4801725.31
+ 2015-01-30	 | 4801725.31
+ 2015-01-31	 | 4801725.31
+ 2015-02-01	 | 9626342.98
+ 2015-02-02	 | 9626342.98
+ 2015-02-03	 | 9626342.98
+Продажи можно взять из таблицы Invoices.
+Нарастающий итог должен быть без оконной функции.
+*/
+
+ SELECT 
+
+  t.InvoiceID as 'id продажи'
+, t2.CustomerName as 'Клиент'
+, t.[InvoiceDate] as 'Дата продажи'
+,sum(t1.Quantity*t1.UnitPrice) as 'Сумма продажи'
+,(select coalesce(sum(s1.Quantity*s1.UnitPrice), 0) FROM [WideWorldImporters].[Sales].[Invoices] s
+left join [WideWorldImporters].[Sales].[InvoiceLines] s1 on s.InvoiceID = s1.InvoiceID
+where EOMONTH(s.InvoiceDate) <= EOMONTH(t.InvoiceDate)
+) as 'Нарастающий итог по месяцу'
+FROM [WideWorldImporters].[Sales].[Invoices] t
+left join [WideWorldImporters].[Sales].[InvoiceLines] t1 on t.InvoiceID = t1.InvoiceID
+left join [WideWorldImporters].[Sales].[Customers] t2 on t.CustomerID = t2.CustomerID
+group by 
+  t.[InvoiceDate] 
+, t.InvoiceID
+, t2.CustomerName
+ order by
+t.[InvoiceDate] 
+
+/*
+2. Сделайте расчет суммы нарастающим итогом в предыдущем запросе с помощью оконной функции.
+   Сравните производительность запросов 1 и 2 с помощью set statistics time, io on
+*/
+
+
+;with cte as (
+SELECT 
+ EOMONTH(t.InvoiceDate) as мес
+,sum(t1.Quantity*t1.UnitPrice) as кол
+FROM [WideWorldImporters].[Sales].[Invoices] t
+left join [WideWorldImporters].[Sales].[InvoiceLines] t1 on t.InvoiceID = t1.InvoiceID
+group by
+EOMONTH(t.InvoiceDate)
+)
+,cte1 as (
+select 
+  мес
+, coalesce(sum(кол) over (order by EOMONTH(мес)
+                rows between unbounded preceding and current row), 
+                0) as 'Нарастающий итог по месяцу'
+from cte
+)
+
+
+SELECT 
+  t.InvoiceID as 'id продажи'
+, t2.CustomerName as 'Клиент'
+, t.[InvoiceDate] as 'Дата продажи'
+, sum(t1.Quantity*t1.UnitPrice) as 'Сумма продажи'
+, t3.[Нарастающий итог по месяцу]
+
+FROM [WideWorldImporters].[Sales].[Invoices] t
+left join [WideWorldImporters].[Sales].[InvoiceLines] t1 on t.InvoiceID = t1.InvoiceID
+left join [WideWorldImporters].[Sales].[Customers] t2 on t.CustomerID = t2.CustomerID
+left join cte1 t3 on EOMONTH(t.InvoiceDate) = t3.мес
+group by 
+  t.[InvoiceDate] 
+, t.InvoiceID
+, t2.CustomerName
+, t3.[Нарастающий итог по месяцу]
+ order by
+t.[InvoiceDate] 
+
+/*
+3. Вывести список 2х самых популярных продуктов (по количеству проданных) 
+в каждом месяце за 2016 год (по 2 самых популярных продукта в каждом месяце).
+*/
+;with cte as (
+ SELECT
+      
+      month(t.[OrderDate]) as Месяц
+	  ,t1.StockItemID as Товар
+	  ,sum(t1.Quantity) as  Количество
+	  
+  FROM [WideWorldImporters].[Sales].[Orders] t
+  left join [WideWorldImporters].[Sales].[OrderLines] t1 on t.OrderID = t1.OrderID
+  where year(t.[OrderDate]) = '2016'
+  group by
+  month(t.[OrderDate])
+  ,t1.StockItemID
+  )
+
+  , cte1 as (
+  select t.Товар, t.Месяц, t.Количество
+  ,ROW_NUMBER() over (partition by t.Месяц order by t.Количество desc) as rw
+  from cte t
+  )
+
+  select t.Месяц, t.Товар
+  from cte1 t
+  where rw in (1,2)
+
+  /*
+4. Функции одним запросом
+Посчитайте по таблице товаров (в вывод также должен попасть ид товара, название, брэнд и цена):
+* пронумеруйте записи по названию товара, так чтобы при изменении буквы алфавита нумерация начиналась заново
+* посчитайте общее количество товаров и выведете полем в этом же запросе
+* посчитайте общее количество товаров в зависимости от первой буквы названия товара
+* отобразите следующий id товара исходя из того, что порядок отображения товаров по имени 
+* предыдущий ид товара с тем же порядком отображения (по имени)
+* названия товара 2 строки назад, в случае если предыдущей строки нет нужно вывести "No items"
+* сформируйте 30 групп товаров по полю вес товара на 1 шт
+
+Для этой задачи НЕ нужно писать аналог без аналитических функций.
+*/
+
+SELECT  
+  [StockItemID]
+, [StockItemName]
+, [Brand]
+, [UnitPrice]
+, ROW_NUMBER() over (partition by left([StockItemName],1) order by [StockItemName] asc) as Нумерация /*пронумеруйте записи по названию товара, так чтобы при изменении буквы алфавита нумерация начиналась заново*/
+, count([StockItemID]) over (partition by 1) as 'Общее количество товаров' /*посчитайте общее количество товаров и выведете полем в этом же запросе*/
+, count([StockItemID]) over (partition by left([StockItemName],1)) as 'Общее количество товаров по первой букве' /*посчитайте общее количество товаров в зависимости от первой буквы названия товара*/
+, last_value ([StockItemID]) over  (order by [StockItemName] rows between 1 following and 1 following) /*отобразите следующий id товара исходя из того, что порядок отображения товаров по имени */
+, last_value ([StockItemID]) over  (order by [StockItemName] rows between 1 preceding and 1 preceding) /*предыдущий ид товара с тем же порядком отображения (по имени)*/
+, isnull(last_value ([StockItemName]) over  (order by [StockItemName] rows between 2 preceding and 2 preceding) ,'No items') /*названия товара 2 строки назад, в случае если предыдущей строки нет нужно вывести "No items"*/
+, ROW_NUMBER() over (partition by [TypicalWeightPerUnit] order by  [StockItemID]) as 'Гурппы по весу' /*сформируйте 30 групп товаров по полю вес товара на 1 шт*/
+
+FROM [WideWorldImporters].[Warehouse].[StockItems]
+
+order by [StockItemName]
+
+/*
+5. По каждому сотруднику выведите последнего клиента, которому сотрудник что-то продал.
+   В результатах должны быть ид и фамилия сотрудника, ид и название клиента, дата продажи, сумму сделки.
+*/
+;with cte as (
+SELECT 
+  t.[OrderID]
+, t.[CustomerID] as 'ID Клиент'
+, t2.CustomerName as 'Клиент'
+, t.[SalespersonPersonID] as 'ID Сотрудник'
+, t1.FullName as 'Сотрудник'
+, t.[OrderDate]
+, row_number() over (partition by t.[SalespersonPersonID] order by t.[OrderDate] desc) as rw
+FROM [WideWorldImporters].[Sales].[Orders] t
+left join [WideWorldImporters].[Application].[People] t1 on t.[SalespersonPersonID] = t1.PersonID
+left join [WideWorldImporters].[Sales].[Customers] t2 on t.[CustomerID] = t2.CustomerID
+)
+
+select 
+ t.[ID Сотрудник]
+,t.Сотрудник
+,t.[ID Клиент]
+, t.Клиент
+,t.OrderDate
+,sum(t1.Quantity*t1.[UnitPrice]) as 'Сумма сделки'
+from cte t
+left join [WideWorldImporters].[Sales].[OrderLines] t1 on t.OrderID = t1.OrderID
+where rw = 1
+group by
+ t.[ID Сотрудник]
+,t.Сотрудник
+,t.[ID Клиент]
+, t.Клиент
+,t.OrderDate
+
+
+/*
+6. Выберите по каждому клиенту два самых дорогих товара, которые он покупал.
+В результатах должно быть ид клиета, его название, ид товара, цена, дата покупки.
+*/
+
+;with cte as (
+SELECT 
+  t.[CustomerID] as 'ID Клиент'
+, t2.CustomerName as 'Клиент'
+, t1.StockItemID as 'ID Товар'
+, t1.UnitPrice as 'Цена'
+, t.[OrderDate] as 'Дата покупки'
+
+  ,row_number() over (partition by t.[CustomerID] order by t1.UnitPrice desc) as rw
+  FROM [WideWorldImporters].[Sales].[Orders] t
+  left join [WideWorldImporters].[Sales].[OrderLines] t1 on t.OrderID = t1.OrderID
+  left join [WideWorldImporters].[Sales].[Customers] t2 on t.[CustomerID] = t2.CustomerID
+  )
+ select 
+  t.[ID Клиент]
+, t.Клиент
+, t.[ID Товар]
+, t.Цена
+, t.[Дата покупки]
+ from cte t
+ where t.rw in (1,2)
+
+
