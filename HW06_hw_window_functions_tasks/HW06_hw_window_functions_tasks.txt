@@ -24,12 +24,14 @@
 , t.[InvoiceDate] as 'Дата продажи'
 ,sum(t1.Quantity*t1.UnitPrice) as 'Сумма продажи'
 ,(select coalesce(sum(s1.Quantity*s1.UnitPrice), 0) FROM [WideWorldImporters].[Sales].[Invoices] s
-left join [WideWorldImporters].[Sales].[InvoiceLines] s1 on s.InvoiceID = s1.InvoiceID
+left join [WideWorldImporters].[Sales].[InvoiceLines] s1 on s.InvoiceID = s1.InvoiceID and s.InvoiceDate >= '2015-01-01'
 where EOMONTH(s.InvoiceDate) <= EOMONTH(t.InvoiceDate)
+
 ) as 'Нарастающий итог по месяцу'
 FROM [WideWorldImporters].[Sales].[Invoices] t
 left join [WideWorldImporters].[Sales].[InvoiceLines] t1 on t.InvoiceID = t1.InvoiceID
 left join [WideWorldImporters].[Sales].[Customers] t2 on t.CustomerID = t2.CustomerID
+where t.[InvoiceDate] >= '2015-01-01'
 group by 
   t.[InvoiceDate] 
 , t.InvoiceID
@@ -48,7 +50,8 @@ SELECT
  EOMONTH(t.InvoiceDate) as мес
 ,sum(t1.Quantity*t1.UnitPrice) as кол
 FROM [WideWorldImporters].[Sales].[Invoices] t
-left join [WideWorldImporters].[Sales].[InvoiceLines] t1 on t.InvoiceID = t1.InvoiceID
+left join [WideWorldImporters].[Sales].[InvoiceLines] t1 on t.InvoiceID = t1.InvoiceID 
+where t.InvoiceDate >= '2015-01-01'
 group by
 EOMONTH(t.InvoiceDate)
 )
@@ -72,7 +75,8 @@ SELECT
 FROM [WideWorldImporters].[Sales].[Invoices] t
 left join [WideWorldImporters].[Sales].[InvoiceLines] t1 on t.InvoiceID = t1.InvoiceID
 left join [WideWorldImporters].[Sales].[Customers] t2 on t.CustomerID = t2.CustomerID
-left join cte1 t3 on EOMONTH(t.InvoiceDate) = t3.мес
+left join cte1 t3 on EOMONTH(t.InvoiceDate) = t3.мес 
+where t.[InvoiceDate] >= '2015-01-01'
 group by 
   t.[InvoiceDate] 
 , t.InvoiceID
@@ -147,14 +151,14 @@ order by [StockItemName]
 */
 ;with cte as (
 SELECT 
-  t.[OrderID]
+  t.InvoiceID
 , t.[CustomerID] as 'ID Клиент'
 , t2.CustomerName as 'Клиент'
 , t.[SalespersonPersonID] as 'ID Сотрудник'
 , t1.FullName as 'Сотрудник'
-, t.[OrderDate]
-, row_number() over (partition by t.[SalespersonPersonID] order by t.[OrderDate] desc) as rw
-FROM [WideWorldImporters].[Sales].[Orders] t
+, t.[InvoiceDate]
+, row_number() over (partition by t.[SalespersonPersonID] order by t.[InvoiceDate] desc) as rw
+FROM [WideWorldImporters].[Sales].[Invoices] t
 left join [WideWorldImporters].[Application].[People] t1 on t.[SalespersonPersonID] = t1.PersonID
 left join [WideWorldImporters].[Sales].[Customers] t2 on t.[CustomerID] = t2.CustomerID
 )
@@ -164,17 +168,17 @@ select
 ,t.Сотрудник
 ,t.[ID Клиент]
 , t.Клиент
-,t.OrderDate
+,t.[InvoiceDate]
 ,sum(t1.Quantity*t1.[UnitPrice]) as 'Сумма сделки'
 from cte t
-left join [WideWorldImporters].[Sales].[OrderLines] t1 on t.OrderID = t1.OrderID
+left join [WideWorldImporters].[Sales].[InvoiceLines] t1 on t.InvoiceID = t1.InvoiceID
 where rw = 1
 group by
  t.[ID Сотрудник]
 ,t.Сотрудник
 ,t.[ID Клиент]
 , t.Клиент
-,t.OrderDate
+,t.[InvoiceDate]
 
 
 /*
@@ -188,11 +192,11 @@ SELECT
 , t2.CustomerName as 'Клиент'
 , t1.StockItemID as 'ID Товар'
 , t1.UnitPrice as 'Цена'
-, t.[OrderDate] as 'Дата покупки'
+, t.[InvoiceDate] as 'Дата покупки'
 
   ,row_number() over (partition by t.[CustomerID] order by t1.UnitPrice desc) as rw
-  FROM [WideWorldImporters].[Sales].[Orders] t
-  left join [WideWorldImporters].[Sales].[OrderLines] t1 on t.OrderID = t1.OrderID
+  FROM [WideWorldImporters].[Sales].[Invoices] t
+  left join [WideWorldImporters].[Sales].[InvoiceLines] t1 on t.InvoiceID = t1.InvoiceID
   left join [WideWorldImporters].[Sales].[Customers] t2 on t.[CustomerID] = t2.CustomerID
   )
  select 
