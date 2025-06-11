@@ -44,6 +44,7 @@ pivot
 (
 sum(Quantity) for CustomerName in (' +@colnameList+ ')
 ) as pvt
+order by convert(date,OrderDate)
 '
  
 exec (@SQLQuery)
