@@ -1,0 +1,49 @@
+/*
+
+Это задание из занятия "Операторы CROSS APPLY, PIVOT, UNPIVOT."
+Нужно для него написать динамический PIVOT, отображающий результаты по всем клиентам.
+Имя клиента указывать полностью из поля CustomerName.
+
+Требуется написать запрос, который в результате своего выполнения 
+формирует сводку по количеству покупок в разрезе клиентов и месяцев.
+В строках должны быть месяцы (дата начала месяца), в столбцах - клиенты.
+
+Дата должна иметь формат dd.mm.yyyy, например, 25.12.2019.
+
+Пример, как должны выглядеть результаты:
+-------------+--------------------+--------------------+----------------+----------------------
+InvoiceMonth | Aakriti Byrraju    | Abel Spirlea       | Abel Tatarescu | ... (другие клиенты)
+-------------+--------------------+--------------------+----------------+----------------------
+01.01.2013   |      3             |        1           |      4         | ...
+01.02.2013   |      7             |        3           |      4         | ...
+-------------+--------------------+--------------------+----------------+----------------------
+*/
+
+DECLARE @colnameList varchar (max)
+ SET @colnameList = NULL
+ SELECT @colnameList = STRING_AGG(CONVERT (NVARCHAR (MAX), ('['+replace(replace(CustomerName, 'Tailspin Toys (',''),')','')+']')), ',')
+ FROM [WideWorldImporters].[Sales].[Customers]
+ where CustomerName like '%Tailspin Toys%';
+ DECLARE @SQLQuery NVARCHAR(MAX)
+ SET @SQLQuery =
+ 'select *
+from
+(
+SELECT 
+  replace(replace(t2.CustomerName, ''Tailspin Toys ('',''''),'')'','''') as CustomerName
+, FORMAT(DATEADD(DAY, 1, EOMONTH(DATEADD(MONTH, -1, t.[OrderDate]))), ''d'', ''de-de'')  as OrderDate
+, count(t.OrderID) as Quantity 
+FROM [WideWorldImporters].[Sales].[Orders] t
+left join [WideWorldImporters].[Sales].[Customers] t2 on t.CustomerID = t2.CustomerID
+where t2.CustomerName like ''%Tailspin Toys%''
+group by      
+  replace(replace(t2.CustomerName, ''Tailspin Toys ('',''''),'')'','''')
+, FORMAT(DATEADD(DAY, 1, EOMONTH(DATEADD(MONTH, -1, t.[OrderDate]))), ''d'', ''de-de'')
+) t
+pivot
+(
+sum(Quantity) for CustomerName in (' +@colnameList+ ')
+) as pvt
+'
+ 
+exec (@SQLQuery)
