@@ -1,0 +1,150 @@
+/*
+1) Написать функцию возвращающую Клиента с наибольшей суммой покупки.
+*/
+
+USE [WideWorldImporters]
+GO
+/****** Object:  UserDefinedFunction [dbo].[RichClient]    Script Date: 14.07.2025 23:22:41 ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+create FUNCTION [dbo].[RichClient] (@P1	int)
+
+RETURNS nvarchar(100)  AS BEGIN
+
+DECLARE @Customer nvarchar(100)
+   set @Customer = 
+   (
+ select top 1
+t.CustomerName
+from
+(select 
+  t2.CustomerName
+, t.InvoiceID
+, sum(t.[Quantity]*t.[UnitPrice]) as 'Сумма покупки'
+from [WideWorldImporters].[Sales].[InvoiceLines] t
+left join [WideWorldImporters].[Sales].[Invoices] t1 on t.InvoiceID = t1.InvoiceID
+left join [WideWorldImporters].[Sales].[Customers] t2 on t1.CustomerID = t2.CustomerID
+GROUP BY 
+ t.InvoiceID
+,t2.CustomerName) t
+order by
+t.[Сумма покупки] desc
+)
+
+RETURN @Customer
+END
+------------------
+--ПРОВЕРЯЕМ
+select [dbo].[RichClient](1)
+
+
+/*
+2) Написать хранимую процедуру с входящим параметром СustomerID, выводящую сумму покупки по этому клиенту.
+Использовать таблицы :
+Sales.Customers
+Sales.Invoices
+Sales.InvoiceLines
+*/
+
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
+CREATE PROCEDURE dbo.PurchaseAmount @СustomerID as int
+AS
+
+SET NOCOUNT ON
+
+BEGIN
+
+select 
+  t2.CustomerName
+, t.InvoiceID
+, sum(t.[Quantity]*t.[UnitPrice]) as 'Сумма покупки'
+from [WideWorldImporters].[Sales].[InvoiceLines] t
+left join [WideWorldImporters].[Sales].[Invoices] t1 on t.InvoiceID = t1.InvoiceID
+left join [WideWorldImporters].[Sales].[Customers] t2 on t1.CustomerID = t2.CustomerID
+where t1.CustomerID = @СustomerID
+GROUP BY 
+ t.InvoiceID
+,t2.CustomerName
+
+END
+GO
+----------------------------------
+--ПОВЕРЯЕМ
+exec dbo.PurchaseAmount
+@СustomerID = 1
+
+
+/*
+3) Создать одинаковую функцию и хранимую процедуру, посмотреть в чем разница в производительности и почему.
+*/
+
+/*ХП*/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
+create PROCEDURE [dbo].[sp_YM] @date date
+AS
+
+SET NOCOUNT ON
+
+BEGIN
+
+select concat(year(@date),'-M',right(100+month(@date),2))
+
+END
+GO
+
+/*Функция*/
+USE [WideWorldImporters]
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
+create FUNCTION [dbo].[fn_YM] (@date date)
+RETURNS nvarchar(max)
+AS
+BEGIN
+
+RETURN concat(year(@date),'-M',right(100+month(@date),2))
+ 
+END
+
+
+----------------------------------
+--ПОВЕРЯЕМ
+exec [dbo].[sp_YM]
+@date = '2025-07-15'
+
+select [dbo].[fn_YM]('2025-07-15')
+
+--Функция проигрывает по производительности по отношению к процедуре. Согласно плану запроса 92% стоимости занимает проверка констант + 8% вычисление скалярного значения
+
+
+
+/*
+4) Создайте табличную функцию покажите как ее можно вызвать для каждой строки result set'а без использования цикла. 
+*/
+create function dbo.SalesInvoices (@CustomerID int)
+returns table
+as
+return
+(
+select t.CustomerID, t.InvoiceID
+from [WideWorldImporters].[Sales].[Invoices] t
+where t.CustomerID = @CustomerID
+)
+go
+
+--ПРОВЕРЯЕМ
+select * from [WideWorldImporters].[Sales].[Customers] c 
+cross apply dbo.SalesInvoices (c.CustomerID) ap
