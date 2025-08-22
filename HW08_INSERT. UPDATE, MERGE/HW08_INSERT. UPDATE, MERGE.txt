@@ -1,0 +1,148 @@
+/*
+1. Довставлять в базу пять записей используя insert в таблицу Customers или Suppliers 
+*/
+
+insert into Sales.Customers (
+    CustomerName
+    , BillToCustomerID
+    , CustomerCategoryID
+    , PrimaryContactPersonID
+    , DeliveryMethodID
+    , DeliveryCityID
+    , PostalCityID
+    , AccountOpenedDate
+    , StandardDiscountPercentage
+    , IsStatementSent
+    , IsOnCreditHold
+    , PaymentDays
+    , PhoneNumber
+    , FaxNumber
+    , WebsiteURL
+    , DeliveryAddressLine1
+    , DeliveryPostalCode
+    , PostalAddressLine1
+    , PostalPostalCode
+    , LastEditedBy
+) output inserted.*
+values
+    ('Bob', 1, 3, 1001, 9, 23025, 23025, '1975-09-10', 0.000, 0, 0, 7, '(928) 425-8120', '(928) 425-8121', 'http://bob.ru', 'Fizkulturnaya 12', '360051', 'Kalinina 1', '112111', 1),
+    ('Olga', 2, 3, 1002, 9, 23025, 23025, '1985-04-24', 0.000, 0, 0, 7, '(915) 080-5832', '(915) 080-5833', 'http://vlad1.com', 'Molodyojnaya 14A', '360052', 'Kalinina 2', '112113', 2),
+    ('Vladimir', 8, 3, 1003, 9, 23025, 23025, '1975-09-10', 0.000, 0, 0, 7, '(928) 122-2222', '(928) 122-2223', 'http://olga.com', 'Fizkulturnaya 12', '360001', 'Kalinina 3', '112114', 3),
+    ('Kate', 4, 3, 1004, 9, 23025, 23025, '2021-01-06', 0.000, 0, 0, 7, '(918) 555-3255', '(918) 555-3256', 'http://katrin.com', 'Molodyojnaya 14A', '360050', 'Kalinina 4', '112115', 4),
+    ('Jillian', 5, 3, 1005, 9, 23025, 23025, '1980-04-14', 0.000, 0, 0, 7, '(923) 122-7777', '(923) 122-7778', 'http://jill.com', 'Fizkulturnaya 10', '360024', 'Kalinina 5', '112116', 5);
+
+/*
+2. Удалите одну запись из Customers, которая была вами добавлена
+*/
+
+delete from Sales.Customers where CustomerName = 'Jillian'
+
+/*
+3. Изменить одну запись, из добавленных через UPDATE
+*/
+
+update tb
+set tb.CustomerName = 'Katarina'
+from Sales.Customers tb
+where CustomerName = 'Kate'
+
+/*
+4. Написать MERGE, который вставит вставит запись в клиенты, если ее там нет, и изменит если она уже есть
+*/
+merge into Sales.Customers as target
+using (
+    select 
+        N'New Customer Example' as CustomerName
+        , 1 as BillToCustomerID
+        , 3 as CustomerCategoryID
+        , 1001 as PrimaryContactPersonID
+        , 9 as DeliveryMethodID
+        , 23025 as DeliveryCityID
+        , 23025 as PostalCityID
+        , '1975-09-10' as AccountOpenedDate
+        , 0.000 as StandardDiscountPercentage
+        , 0 as IsStatementSent
+        , 0 as IsOnCreditHold
+        , 7 as PaymentDays
+        , '(928) 425-8120' as PhoneNumber
+        , '(928) 425-8121' as FaxNumber
+        , 'http://bob.ru' as WebsiteURL
+        , 'Fizkulturnaya 12' as DeliveryAddressLine1
+        , '360051' as DeliveryPostalCode
+        , 'Kalinina 1' as PostalAddressLine1
+        , '112111' as PostalPostalCode
+        , 1 as LastEditedBy
+) as source
+on target.CustomerName = source.CustomerName
+when matched then
+    update set
+          BillToCustomerID = source.BillToCustomerID
+        , CustomerCategoryID = source.CustomerCategoryID
+        , PrimaryContactPersonID = source.PrimaryContactPersonID
+        , DeliveryMethodID = source.DeliveryMethodID
+        , DeliveryCityID = source.DeliveryCityID
+        , PostalCityID = source.PostalCityID
+        , AccountOpenedDate = source.AccountOpenedDate
+        , StandardDiscountPercentage = source.StandardDiscountPercentage
+        , IsStatementSent = source.IsStatementSent
+        , IsOnCreditHold = source.IsOnCreditHold
+        , PaymentDays = source.PaymentDays
+        , PhoneNumber = source.PhoneNumber
+        , FaxNumber = source.FaxNumber
+        , WebsiteURL = source.WebsiteURL
+        , DeliveryAddressLine1 = source.DeliveryAddressLine1
+        , DeliveryPostalCode = source.DeliveryPostalCode
+        , PostalAddressLine1 = source.PostalAddressLine1
+        , PostalPostalCode = source.PostalPostalCode
+        , LastEditedBy = source.LastEditedBy
+when not matched then
+    insert (
+          CustomerName
+        , BillToCustomerID
+        , CustomerCategoryID
+        , PrimaryContactPersonID
+        , DeliveryMethodID
+        , DeliveryCityID
+        , PostalCityID
+        , AccountOpenedDate
+        , StandardDiscountPercentage
+        , IsStatementSent
+        , IsOnCreditHold
+        , PaymentDays
+        , PhoneNumber
+        , FaxNumber
+        , WebsiteURL
+        , DeliveryAddressLine1
+        , DeliveryPostalCode
+        , PostalAddressLine1
+        , PostalPostalCode
+        , LastEditedBy
+    )
+    values (
+        source.CustomerName
+        , source.BillToCustomerID
+        , source.CustomerCategoryID
+        , source.PrimaryContactPersonID
+        , source.DeliveryMethodID
+        , source.DeliveryCityID
+        , source.PostalCityID
+        , source.AccountOpenedDate
+        , source.StandardDiscountPercentage
+        , source.IsStatementSent
+        , source.IsOnCreditHold
+        , source.PaymentDays
+        , source.PhoneNumber
+        , source.FaxNumber
+        , source.WebsiteURL
+        , source.DeliveryAddressLine1
+        , source.DeliveryPostalCode
+        , source.PostalAddressLine1
+        , source.PostalPostalCode
+        , source.LastEditedBy
+    )
+output deleted.*, $action, inserted.*;
+
+
+
+
+
