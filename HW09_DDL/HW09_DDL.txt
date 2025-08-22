@@ -1,0 +1,131 @@
+CREATE DATABASE Work
+
+SET XACT_ABORT ON
+
+BEGIN TRANSACTION QUICKDBD
+
+CREATE TABLE [Users] (
+    [ID] int  NOT NULL ,
+    [Description] nvarchar(max)  NOT NULL ,
+    [Login] nvarchar(50)  NOT NULL ,
+    [Division] int  NOT NULL ,
+    [Position] int  NOT NULL ,
+    CONSTRAINT [PK_Users] PRIMARY KEY CLUSTERED (
+        [ID] ASC
+    )
+)
+
+CREATE TABLE [Divisions] (
+    [ID] int  NOT NULL ,
+    [Description] nvarchar(max)  NOT NULL ,
+    [Region] nvarchar(50)  NOT NULL ,
+    CONSTRAINT [PK_Divisions] PRIMARY KEY CLUSTERED (
+        [ID] ASC
+    )
+)
+
+CREATE TABLE [Calendar] (
+    [Date] date  NOT NULL ,
+    [Year] smallint  NOT NULL ,
+    [Quarter] tinyint  NOT NULL ,
+    [MonthName] nvarchar(10)  NOT NULL ,
+    [Month] tinyint  NOT NULL ,
+    [Day] tinyint  NOT NULL ,
+    [LastDayOfTheMonth] tinyint  NOT NULL 
+)
+
+CREATE TABLE [Tasks] (
+    [TaskID] int  NOT NULL ,
+    [UserID] int  NOT NULL ,
+    [Description] nvarchar(max)  NOT NULL ,
+    [CreatedTask] datetime  NOT NULL ,
+    [OrderedTime] datetime  NOT NULL ,
+    [ReactionTime] datetime  NOT NULL ,
+    [EndTime] datetime  NOT NULL ,
+    [IsClosed] bit  NOT NULL ,
+    [StateID] int  NOT NULL ,
+    [PercentDone] int  NOT NULL ,
+    CONSTRAINT [PK_Tasks] PRIMARY KEY CLUSTERED (
+        [TaskID] ASC
+    )
+)
+
+CREATE TABLE [WorkingOnTasks] (
+    [TaskID] int  NOT NULL ,
+    [TaskService] int  NOT NULL ,
+    [Customer] int  NOT NULL ,
+    [TaskHelpers] int  NOT NULL ,
+    [Comments] nvarchar(max)  NOT NULL ,
+    [StateID] int  NOT NULL ,
+    [CratedTask] datetime  NOT NULL ,
+    [ReactionTime] datetime  NOT NULL ,
+    [EndTime] datetime  NOT NULL ,
+    [includedInThePlan] int  NOT NULL 
+)
+
+CREATE TABLE [Positions] (
+    [ID] int  NOT NULL ,
+    [Description] nvarchar(max)  NOT NULL ,
+    CONSTRAINT [PK_Positions] PRIMARY KEY CLUSTERED (
+        [ID] ASC
+    )
+)
+
+CREATE TABLE [States] (
+    [ID] int  NOT NULL ,
+    [Description] varchar(80)  NOT NULL ,
+    CONSTRAINT [PK_States] PRIMARY KEY CLUSTERED (
+        [ID] ASC
+    )
+)
+
+CREATE TABLE [TaskService] (
+    [ID] int  NOT NULL ,
+    [ParentID] int  NOT NULL ,
+    [Description] nvarchar(100)  NOT NULL ,
+    CONSTRAINT [PK_TaskService] PRIMARY KEY CLUSTERED (
+        [ID] ASC
+    )
+)
+
+ALTER TABLE [Users] WITH CHECK ADD CONSTRAINT [FK_Users_Division] FOREIGN KEY([Division])
+REFERENCES [Divisions] ([ID])
+
+ALTER TABLE [Users] CHECK CONSTRAINT [FK_Users_Division]
+
+ALTER TABLE [Users] WITH CHECK ADD CONSTRAINT [FK_Users_Position] FOREIGN KEY([Position])
+REFERENCES [Positions] ([ID])
+
+ALTER TABLE [Users] CHECK CONSTRAINT [FK_Users_Position]
+
+ALTER TABLE [Tasks] WITH CHECK ADD CONSTRAINT [FK_Tasks_UserID] FOREIGN KEY([UserID])
+REFERENCES [Users] ([ID])
+
+ALTER TABLE [Tasks] CHECK CONSTRAINT [FK_Tasks_UserID]
+
+ALTER TABLE [Tasks] WITH CHECK ADD CONSTRAINT [FK_Tasks_StateID] FOREIGN KEY([StateID])
+REFERENCES [States] ([ID])
+
+ALTER TABLE [Tasks] CHECK CONSTRAINT [FK_Tasks_StateID]
+
+ALTER TABLE [WorkingOnTasks] WITH CHECK ADD CONSTRAINT [FK_WorkingOnTasks_TaskID] FOREIGN KEY([TaskID])
+REFERENCES [Tasks] ([TaskID])
+
+ALTER TABLE [WorkingOnTasks] CHECK CONSTRAINT [FK_WorkingOnTasks_TaskID]
+
+ALTER TABLE [WorkingOnTasks] WITH CHECK ADD CONSTRAINT [FK_WorkingOnTasks_TaskService] FOREIGN KEY([TaskService])
+REFERENCES [TaskService] ([ID])
+
+ALTER TABLE [WorkingOnTasks] CHECK CONSTRAINT [FK_WorkingOnTasks_TaskService]
+
+ALTER TABLE [WorkingOnTasks] WITH CHECK ADD CONSTRAINT [FK_WorkingOnTasks_TaskHelpers] FOREIGN KEY([TaskHelpers])
+REFERENCES [Users] ([ID])
+
+ALTER TABLE [WorkingOnTasks] CHECK CONSTRAINT [FK_WorkingOnTasks_TaskHelpers]
+
+ALTER TABLE [WorkingOnTasks] WITH CHECK ADD CONSTRAINT [FK_WorkingOnTasks_StateID] FOREIGN KEY([StateID])
+REFERENCES [States] ([ID])
+
+ALTER TABLE [WorkingOnTasks] CHECK CONSTRAINT [FK_WorkingOnTasks_StateID]
+
+COMMIT TRANSACTION QUICKDBD
