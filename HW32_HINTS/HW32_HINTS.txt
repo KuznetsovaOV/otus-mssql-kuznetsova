@@ -1,0 +1,150 @@
+--Исходный запрос
+Select 
+  ord.CustomerID
+, det.StockItemID
+, SUM(det.UnitPrice) UnitPrice
+, SUM(det.Quantity) Quantity
+, COUNT(ord.OrderID) OrderID
+
+FROM Sales.Orders ord
+JOIN Sales.OrderLines det ON det.OrderID = ord.OrderID
+JOIN Sales.Invoices Inv ON Inv.OrderID = ord.OrderID
+JOIN Sales.CustomerTransactions Trans ON Trans.InvoiceID = Inv.InvoiceID
+JOIN Warehouse.StockItemTransactions ItemTrans ON ItemTrans.StockItemID = det.StockItemID
+
+WHERE 
+Inv.BillToCustomerID != ord.CustomerID
+AND (Select SupplierId
+         FROM Warehouse.StockItems It
+         Where It.StockItemID = det.StockItemID) = 12
+AND (SELECT SUM(Total.UnitPrice*Total.Quantity)
+        FROM Sales.OrderLines Total
+        Join Sales.Orders ordTotal On ordTotal.OrderID = Total.OrderID
+        WHERE ordTotal.CustomerID = Inv.CustomerID) > 250000
+AND DATEDIFF(dd, Inv.InvoiceDate, ord.OrderDate) = 0
+
+
+GROUP BY 
+  ord.CustomerID
+, det.StockItemID
+
+ORDER BY 
+  ord.CustomerID
+, det.StockItemID
+
+
+---------------------------------------------
+
+
+
+--Вариант с хинтами неоптимален
+
+CREATE TABLE #SupplierItems (
+    StockItemID int,
+    PRIMARY KEY CLUSTERED (StockItemID)
+);
+
+
+INSERT INTO #SupplierItems (StockItemID)
+SELECT StockItemID 
+FROM Warehouse.StockItems WITH (READUNCOMMITTED) -- Хинт для ускорения сканирования
+WHERE SupplierId = 12
+OPTION (OPTIMIZE FOR UNKNOWN);
+
+
+CREATE TABLE #HighValueCustomers (
+    CustomerID int,
+    PRIMARY KEY CLUSTERED (CustomerID)
+);
+
+
+INSERT INTO #HighValueCustomers (CustomerID)
+SELECT ordTotal.CustomerID
+FROM Sales.Orders ordTotal WITH (READUNCOMMITTED)
+JOIN Sales.OrderLines Total  ON ordTotal.OrderID = Total.OrderID
+GROUP BY ordTotal.CustomerID
+HAVING SUM(Total.UnitPrice*Total.Quantity) > 250000
+OPTION (OPTIMIZE FOR UNKNOWN, HASH GROUP);
+
+
+SELECT 
+    ord.CustomerID,
+    det.StockItemID,
+    SUM(det.UnitPrice) AS UnitPrice,
+    SUM(det.Quantity) AS Quantity,
+    COUNT(ord.OrderID) AS OrderID
+FROM Sales.Orders ord WITH (READUNCOMMITTED)
+JOIN Sales.OrderLines det WITH (FORCESEEK) ON det.OrderID = ord.OrderID
+JOIN Sales.Invoices Inv WITH (FORCESEEK) ON Inv.OrderID = ord.OrderID 
+    AND DATEDIFF(day, Inv.InvoiceDate, ord.OrderDate) = 0
+JOIN Sales.CustomerTransactions Trans WITH (FORCESEEK) ON Trans.InvoiceID = Inv.InvoiceID
+JOIN Warehouse.StockItemTransactions ItemTrans WITH (FORCESEEK) ON ItemTrans.StockItemID = det.StockItemID
+JOIN #SupplierItems si ON det.StockItemID = si.StockItemID
+JOIN #HighValueCustomers hvc ON hvc.CustomerID = Inv.CustomerID
+WHERE Inv.BillToCustomerID != ord.CustomerID
+GROUP BY 
+    ord.CustomerID,
+    det.StockItemID
+ORDER BY 
+    ord.CustomerID,
+    det.StockItemID
+OPTION (OPTIMIZE FOR UNKNOWN, HASH GROUP, FAST 50);
+
+
+--DROP TABLE #SupplierItems;
+--DROP TABLE #HighValueCustomers;
+
+
+--Вариант с cte
+
+WITH SupplierItems AS (
+    SELECT StockItemID 
+    FROM Warehouse.StockItems 
+    WHERE SupplierId = 12
+),
+HighValueCustomers AS (
+    SELECT ordTotal.CustomerID
+    FROM Sales.Orders ordTotal
+    JOIN Sales.OrderLines Total ON ordTotal.OrderID = Total.OrderID
+    GROUP BY ordTotal.CustomerID
+    HAVING SUM(Total.UnitPrice * Total.Quantity) > 250000
+),
+FilteredOrders AS (
+    SELECT 
+        ord.OrderID,
+        ord.CustomerID,
+        det.StockItemID,
+        det.UnitPrice,
+        det.Quantity
+    FROM Sales.Orders ord
+    JOIN Sales.OrderLines det ON det.OrderID = ord.OrderID
+    JOIN Sales.Invoices Inv ON Inv.OrderID = ord.OrderID 
+        AND Inv.BillToCustomerID <> ord.CustomerID
+        AND DATEDIFF(day, Inv.InvoiceDate, ord.OrderDate) = 0
+    JOIN SupplierItems si ON det.StockItemID = si.StockItemID
+JOIN HighValueCustomers hvc ON hvc.CustomerID = Inv.CustomerID
+    WHERE EXISTS (
+        SELECT 1 
+        FROM Sales.CustomerTransactions Trans 
+        WHERE Trans.InvoiceID = Inv.InvoiceID
+    )
+    AND EXISTS (
+        SELECT 1 
+        FROM Warehouse.StockItemTransactions ItemTrans 
+        WHERE ItemTrans.StockItemID = det.StockItemID
+    )
+)
+SELECT 
+    CustomerID,
+    StockItemID,
+    SUM(UnitPrice) AS UnitPrice,
+    SUM(Quantity) AS Quantity,
+    COUNT( OrderID) AS OrderID
+FROM FilteredOrders
+
+GROUP BY 
+    CustomerID,
+    StockItemID
+ORDER BY 
+    CustomerID,
+    StockItemID;
