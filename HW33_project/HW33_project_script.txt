@@ -1,0 +1,198 @@
+
+--1.	Процент внеплановых задач завершенных (в течение 1440 минут)
+
+USE [Work]
+GO
+/****** Object:  StoredProcedure [dbo].[PercentageOfUnplannedTasksCompleted]    Script Date: 30.09.2025 9:56:16 ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
+ALTER procedure [dbo].[PercentageOfUnplannedTasksCompleted] @StartDate as date, @EndDate as date,  @Details as int 
+
+as
+
+SET NOCOUNT ON
+
+begin 
+
+--вывод данных в зависимости от признака детализации
+	if @Details = 0 
+begin  
+
+SELECT 
+distinct
+  t.[TaskID] as НомерЗадачи
+, d.Description as Подразделение
+, u.Description as Исполнитель
+, case when DATEDIFF(minute, t.[CreatedTask], t.[EndTime]) <= 1440 then 1 else 0 end as ВыполненныхВСрок
+
+into #t1
+
+FROM [Work].[dbo].[Tasks] t
+  
+  left join [Work].[dbo].[WorkingOnTasks] t1 on t.TaskID = t1.TaskID
+  left join [Work].[dbo].[Users] u on t.UserID = u.ID
+  left join [Work].[dbo].[Divisions] d on u.Division = d.ID
+  left join [Work].[dbo].[States] s on t.StateID = s.ID
+  where 
+ t1.includedInThePlan = 0
+  and 
+ t.[StateID] = 4
+
+ and convert(date,t.[EndTime]) between @StartDate and @EndDate
+
+
+
+ select distinct
+ t.Подразделение
+ , convert(float,count(t.НомерЗадачи) over (partition by t.Подразделение)) as КоличествоЗадач
+ , convert(float,sum(t.ВыполненныхВСрок) over (partition by t.Подразделение)) as КоличествоВыполненныхВСрок
+ into #t2
+ from #t1 t
+
+select 
+ t.Подразделение
+,round(t.КоличествоВыполненныхВСрок/t.КоличествоЗадач,2) as 'Процент внеплановых задач завершенных в течение 1440 минут'
+from #t2 t
+order by t.Подразделение
+
+
+end
+else 
+begin
+SELECT 
+distinct
+  t.[TaskID] as НомерЗадачи
+, d.Description as Подразделение
+, u.Description as Исполнитель
+, case when DATEDIFF(minute, t.[CreatedTask], t.[EndTime]) <= 1440 then 1 else 0 end as ВыполненныхВСрок
+
+into #t11
+
+FROM [Work].[dbo].[Tasks] t
+  
+  left join [Work].[dbo].[WorkingOnTasks] t1 on t.TaskID = t1.TaskID
+  left join [Work].[dbo].[Users] u on t.UserID = u.ID
+  left join [Work].[dbo].[Divisions] d on u.Division = d.ID
+  left join [Work].[dbo].[States] s on t.StateID = s.ID
+  where 
+ t1.includedInThePlan = 0
+  and 
+ t.[StateID] = 4
+and convert(date,t.[EndTime]) between @StartDate and @EndDate
+
+
+
+ select 
+ t.НомерЗадачи ,t.Исполнитель, t.Подразделение
+ , convert(float,count(t.НомерЗадачи) over (partition by t.Исполнитель)) as КоличествоЗадач
+ , convert(float,sum(t.ВыполненныхВСрок) over (partition by t.Исполнитель)) as КоличествоВыполненныхВСрок
+ into #t22
+ from #t11 t
+
+select 
+ t.Подразделение, t.Исполнитель, t.НомерЗадачи
+,round(t.КоличествоВыполненныхВСрок/t.КоличествоЗадач,2) as 'Процент внеплановых задач завершенных в течение 1440 минут'
+from #t22 t
+order by t.Исполнитель
+
+end
+
+SET NOCOUNT OFF
+
+end
+
+------------------------------------------------------------------------------------------
+
+
+--2.	Процент вовремя взятых в работу задач (в течение 120 минут)
+USE [Work]
+GO
+/****** Object:  StoredProcedure [dbo].[CompletedTasks120]    Script Date: 30.09.2025 9:57:50 ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
+ALTER procedure [dbo].[CompletedTasks120] @StartDate as date, @EndDate as date,  @Details as int 
+
+as
+
+SET NOCOUNT ON
+
+begin 
+
+--вывод данных в зависимости от признака детализации
+	if @Details = 0 
+begin  
+
+
+SELECT distinct t.[TaskID] as НомерЗадачи
+      ,sr1.Description as РодительскийСервис
+	  ,u.Description as Исполнитель
+	  ,case when DATEDIFF(minute, t.[CreatedTask], t.[EndTime]) <= 120 then 1 else 0 end as ПринятаВРаботуВСрок
+
+	  into #t1
+
+  FROM [Work].[dbo].[Tasks] t
+
+  left join [Work].[dbo].WorkingOnTasks t1 on t.TaskID = t1.TaskID
+  left join [Work].[dbo].TaskService sr on t1.TaskService = sr.ID
+  left join [Work].[dbo].TaskService sr1 on sr.ParentID = sr1.ID
+  left join [Work].[dbo].Users u on t.UserID = u.ID
+
+  where convert(date,t.[EndTime]) between @StartDate and @EndDate
+
+   select distinct
+ t.РодительскийСервис
+ , convert(float,count(t.НомерЗадачи) over (partition by t.РодительскийСервис)) as КоличествоЗадач
+ , convert(float,sum(t.ПринятаВРаботуВСрок) over (partition by t.РодительскийСервис)) as КоличествоПринятыхВСрок
+ into #t2
+ from #t1 t
+
+select 
+ t.РодительскийСервис
+,round(t.КоличествоПринятыхВСрок/t.КоличествоЗадач,2) as 'Процент вовремя взятых в работу задач в течение 120 минут'
+from #t2 t
+order by t.РодительскийСервис
+
+end
+else 
+begin
+
+SELECT distinct t.[TaskID] as НомерЗадачи
+      ,sr1.Description as РодительскийСервис
+	  ,u.Description as Исполнитель
+	  ,case when DATEDIFF(minute, t.[CreatedTask], t.[EndTime]) <= 120 then 1 else 0 end as ПринятаВРаботуВСрок
+
+	  into #t11
+
+  FROM [Work].[dbo].[Tasks] t
+
+  left join [Work].[dbo].WorkingOnTasks t1 on t.TaskID = t1.TaskID
+  left join [Work].[dbo].TaskService sr on t1.TaskService = sr.ID
+  left join [Work].[dbo].TaskService sr1 on sr.ParentID = sr1.ID
+  left join [Work].[dbo].Users u on t.UserID = u.ID
+
+   where convert(date,t.[EndTime]) between @StartDate and @EndDate
+
+     select distinct
+ t.НомерЗадачи ,t.Исполнитель, t.РодительскийСервис
+ , convert(float,count(t.НомерЗадачи) over (partition by t.РодительскийСервис)) as КоличествоЗадач
+ , convert(float,sum(t.ПринятаВРаботуВСрок) over (partition by t.РодительскийСервис)) as КоличествоПринятыхВСрок
+ into #t22
+ from #t11 t
+
+select 
+ t.НомерЗадачи ,t.Исполнитель, t.РодительскийСервис
+,round(t.КоличествоПринятыхВСрок/t.КоличествоЗадач,2) as 'Процент вовремя взятых в работу задач в течение 120 минут'
+from #t22 t
+order by t.РодительскийСервис
+
+end
+
+SET NOCOUNT OFF
+
+end
